@@ -174,28 +174,34 @@ export const uploadGalleryPhoto = createServerFn({ method: "POST" })
     };
   });
 
+const isUuid = (str: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
 export const deleteGalleryPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input) => z.object({ id: z.string().min(1) }).parse(input))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    try {
-      const { data: row } = await supabaseAdmin
-        .from("gallery_photos")
-        .select("storage_path")
-        .eq("id", data.id)
-        .maybeSingle();
+    if (isUuid(data.id)) {
+      try {
+        const { data: row } = await supabaseAdmin
+          .from("gallery_photos")
+          .select("storage_path")
+          .eq("id", data.id)
+          .maybeSingle();
 
-      if (row?.storage_path) {
-        await supabaseAdmin.storage.from("gallery").remove([row.storage_path]);
+        if (row?.storage_path) {
+          await supabaseAdmin.storage.from("gallery").remove([row.storage_path]);
+        }
+        await supabaseAdmin.from("gallery_photos").delete().eq("id", data.id);
+      } catch (err) {
+        console.warn("[Gallery] Supabase delete warning:", err);
       }
-      await supabaseAdmin.from("gallery_photos").delete().eq("id", data.id);
-    } catch (err) {
-      console.warn("[Gallery] Supabase delete warning:", err);
     }
 
     await deleteLocalGalleryPhoto(data.id);
     return { ok: true };
   });
+

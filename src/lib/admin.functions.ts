@@ -323,12 +323,15 @@ export const updateUserRole = createServerFn({ method: "POST" })
     return { ok: true, role: data.role };
   });
 
+const isUuid = (str: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
 export const updateUserDetails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z
       .object({
-        userId: z.string().uuid(),
+        userId: z.string().min(1),
         fullName: z.string().trim().min(2),
         email: z.string().trim().email(),
         phoneNumber: z.string().trim().optional(),
@@ -363,7 +366,7 @@ export const resetUserPassword = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        userId: z.string().uuid(),
+        userId: z.string().min(1),
         newPassword: z.string().min(8, "New password must be at least 8 characters"),
       })
       .parse(input),
@@ -392,7 +395,7 @@ export const toggleUserBan = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        userId: z.string().uuid(),
+        userId: z.string().min(1),
         banned: z.boolean(),
         durationHours: z.number().positive().optional(),
       })
@@ -430,7 +433,7 @@ export const toggleUserBan = createServerFn({ method: "POST" })
 
 export const deleteManagedUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ userId: z.string().uuid() }).parse(input))
+  .inputValidator((input) => z.object({ userId: z.string().min(1) }).parse(input))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
 
@@ -441,10 +444,12 @@ export const deleteManagedUser = createServerFn({ method: "POST" })
     const { supabaseAdmin, isServiceRoleConfigured } = await import("@/integrations/supabase/client.server");
 
     // Remove user roles
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    if (isUuid(data.userId)) {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    }
 
     // Delete auth user if service role key is active
-    if (isServiceRoleConfigured()) {
+    if (isServiceRoleConfigured() && isUuid(data.userId)) {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
       if (error) {
         throw new Error(`Failed to delete user from Supabase Auth: ${error.message}`);
@@ -459,7 +464,7 @@ export const convertRegistrationToUser = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        registrationId: z.string().uuid(),
+        registrationId: z.string().min(1),
         password: z.string().min(8),
         role: z.enum(["admin", "user"]).default("user"),
       })
@@ -475,14 +480,16 @@ export const convertRegistrationToUser = createServerFn({ method: "POST" })
     }
 
     let reg: any = null;
-    try {
-      const { data: regRemote } = await supabaseAdmin
-        .from("registrations")
-        .select("*")
-        .eq("id", data.registrationId)
-        .maybeSingle();
-      if (regRemote) reg = regRemote;
-    } catch {}
+    if (isUuid(data.registrationId)) {
+      try {
+        const { data: regRemote } = await supabaseAdmin
+          .from("registrations")
+          .select("*")
+          .eq("id", data.registrationId)
+          .maybeSingle();
+        if (regRemote) reg = regRemote;
+      } catch {}
+    }
 
     if (!reg) {
       const localList = await readLocalRegistrations();
@@ -516,9 +523,11 @@ export const convertRegistrationToUser = createServerFn({ method: "POST" })
     });
 
     // Mark registration as enrolled
-    try {
-      await supabaseAdmin.from("registrations").update({ status: "enrolled" }).eq("id", data.registrationId);
-    } catch {}
+    if (isUuid(data.registrationId)) {
+      try {
+        await supabaseAdmin.from("registrations").update({ status: "enrolled" }).eq("id", data.registrationId);
+      } catch {}
+    }
     await updateLocalRegistrationStatus(data.registrationId, "enrolled");
 
     return {
@@ -557,15 +566,17 @@ export const listRegistrations = createServerFn({ method: "GET" })
 
 export const deleteRegistration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input) => z.object({ id: z.string().min(1) }).parse(input))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { deleteLocalRegistration } = await import("@/lib/registrations-store");
 
-    try {
-      await supabaseAdmin.from("registrations").delete().eq("id", data.id);
-    } catch {}
+    if (isUuid(data.id)) {
+      try {
+        await supabaseAdmin.from("registrations").delete().eq("id", data.id);
+      } catch {}
+    }
     await deleteLocalRegistration(data.id);
     return { ok: true };
   });
@@ -575,7 +586,7 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: z.string().min(1),
         status: z.enum(["new", "contacted", "enrolled", "completed", "cancelled"]),
       })
       .parse(input),
@@ -585,9 +596,11 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { updateLocalRegistrationStatus } = await import("@/lib/registrations-store");
 
-    try {
-      await supabaseAdmin.from("registrations").update({ status: data.status }).eq("id", data.id);
-    } catch {}
+    if (isUuid(data.id)) {
+      try {
+        await supabaseAdmin.from("registrations").update({ status: data.status }).eq("id", data.id);
+      } catch {}
+    }
     await updateLocalRegistrationStatus(data.id, data.status);
     return { ok: true };
   });

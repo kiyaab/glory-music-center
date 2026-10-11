@@ -217,7 +217,7 @@ export const recordAttendance = createServerFn({ method: "POST" })
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (expected YYYY-MM-DD)"),
         records: z.array(
           z.object({
-            registrationId: z.string().uuid(),
+            registrationId: z.string().min(1),
             studentId: z.string().min(1),
             studentName: z.string().min(1),
             course: z.string().min(1),
@@ -372,7 +372,7 @@ export const getAttendanceStats = createServerFn({ method: "GET" })
  */
 export const getStudentAttendanceHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ registrationId: z.string().uuid() }).parse(input))
+  .inputValidator((input) => z.object({ registrationId: z.string().min(1) }).parse(input))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
 

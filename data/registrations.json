@@ -1,17 +1,1 @@
-[
-  {
-    "id": "test-reg-1791721952433",
-    "full_name": "Yared Music Student",
-    "age": 23,
-    "gender": "male",
-    "phone_number": "+251911002233",
-    "email": "yared@example.com",
-    "course": "piano",
-    "preferred_schedule": "monday-saturday-2-1",
-    "message": "Student ID: GMC-2026-0005 | Test Note",
-    "language": "en",
-    "status": "new",
-    "created_at": "2026-10-11T12:32:32.433Z",
-    "updated_at": "2026-10-11T12:32:32.434Z"
-  }
-]
+[]
