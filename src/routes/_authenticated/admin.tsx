@@ -61,9 +61,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
   bootstrapFirstAdmin,
+  createManualStudentRegistration,
   deleteManagedUser,
   deleteRegistration,
   isCurrentUserAdmin,
@@ -76,9 +78,11 @@ import {
   updateUserDetails,
   updateUserRole,
   type ManagedUser,
+  type ManualStudentRegistrationInput,
 } from "@/lib/admin.functions";
 import { clearClientAdminSession } from "@/lib/auth-admin";
 import { deleteGalleryPhoto, listGalleryPhotos } from "@/lib/gallery.functions";
+import { formatScheduleLabel, SCHEDULE_OPTIONS } from "@/lib/registration.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -1364,6 +1368,455 @@ function ResetPasswordDialog({
 }
 
 // ==========================================
+// MANUAL STUDENT REGISTRATION DIALOG
+// ==========================================
+function ManualStudentRegisterDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: ManualStudentRegistrationInput) => void;
+  isPending: boolean;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [age, setAge] = useState<number>(14);
+  const [gender, setGender] = useState<"male" | "female" | "other">("male");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [altPhoneNumber, setAltPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianRelationship, setGuardianRelationship] = useState("");
+  const [address, setAddress] = useState("Bale Robe");
+  const [course, setCourse] = useState<"piano" | "keyboard" | "guitar" | "saxophone" | "vocal">("piano");
+  const [skillLevel, setSkillLevel] = useState("beginner");
+  const [hasInstrument, setHasInstrument] = useState("no");
+  const [classType, setClassType] = useState("group");
+  const [preferredSchedule, setPreferredSchedule] = useState("monday-saturday-2-1");
+  const [status, setStatus] = useState<"new" | "contacted" | "enrolled" | "completed" | "cancelled">("enrolled");
+  const [language, setLanguage] = useState<"en" | "am" | "om">("en");
+  const [message, setMessage] = useState("");
+  const [createUserAccount, setCreateUserAccount] = useState(false);
+  const [userPassword, setUserPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  useMemo(() => {
+    if (open && !userPassword) {
+      setUserPassword(generateSecurePassword());
+    }
+  }, [open]);
+
+  function resetForm() {
+    setFullName("");
+    setAge(14);
+    setGender("male");
+    setPhoneNumber("");
+    setAltPhoneNumber("");
+    setEmail("");
+    setGuardianName("");
+    setGuardianRelationship("");
+    setAddress("Bale Robe");
+    setCourse("piano");
+    setSkillLevel("beginner");
+    setHasInstrument("no");
+    setClassType("group");
+    setPreferredSchedule("monday-saturday-2-1");
+    setStatus("enrolled");
+    setLanguage("en");
+    setMessage("");
+    setCreateUserAccount(false);
+    setUserPassword(generateSecurePassword());
+  }
+
+  function handleFormSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fullName.trim()) return toast.error("Please enter student full name.");
+    if (!email.trim()) return toast.error("Please enter student email.");
+    if (!phoneNumber.trim()) return toast.error("Please enter student phone number.");
+    if (createUserAccount && userPassword.length < 8) {
+      return toast.error("User password must be at least 8 characters.");
+    }
+
+    onSubmit({
+      fullName: fullName.trim(),
+      age: Number(age) || 12,
+      gender,
+      phoneNumber: phoneNumber.trim(),
+      altPhoneNumber: altPhoneNumber.trim() || undefined,
+      email: email.trim(),
+      guardianName: guardianName.trim() || undefined,
+      guardianRelationship: guardianRelationship.trim() || undefined,
+      address: address.trim() || undefined,
+      course,
+      skillLevel,
+      hasInstrument,
+      classType,
+      preferredSchedule,
+      status,
+      language,
+      message: message.trim() || undefined,
+      createUserAccount,
+      userPassword: createUserAccount ? userPassword : undefined,
+    });
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) resetForm();
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl flex items-center gap-2">
+            <UserPlus className="h-6 w-6 text-primary" /> Register Student Manually
+          </DialogTitle>
+          <DialogDescription>
+            Directly enroll a new student with full detailed profile and assign their class schedule.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleFormSubmit} className="space-y-6 mt-2">
+          {/* Section 1: Basic Student Info */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b pb-1">
+              1. Student Identity & Contact
+            </h4>
+            <div className="space-y-1.5">
+              <Label htmlFor="m-fullname">Full Name *</Label>
+              <Input
+                id="m-fullname"
+                placeholder="e.g. Yohannes Tesfaye"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                className="rounded-2xl min-h-11 bg-card"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-age">Age *</Label>
+                <Input
+                  id="m-age"
+                  type="number"
+                  min={4}
+                  max={99}
+                  value={age}
+                  onChange={(e) => setAge(parseInt(e.target.value, 10) || 4)}
+                  required
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-gender">Gender *</Label>
+                <Select value={gender} onValueChange={(v) => setGender(v as "male" | "female" | "other")}>
+                  <SelectTrigger id="m-gender" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-phone">Primary Phone Number *</Label>
+                <Input
+                  id="m-phone"
+                  placeholder="+251 91 123 4567"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  required
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-altphone">Alternate / Emergency Phone</Label>
+                <Input
+                  id="m-altphone"
+                  placeholder="+251 92 987 6543"
+                  value={altPhoneNumber}
+                  onChange={(e) => setAltPhoneNumber(e.target.value)}
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-email">Email Address *</Label>
+                <Input
+                  id="m-email"
+                  type="email"
+                  placeholder="student@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-address">Address / Kebele</Label>
+                <Input
+                  id="m-address"
+                  placeholder="e.g. Bale Robe, Kebele 02"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Guardian Information */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b pb-1">
+              2. Parent / Guardian Details
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-guardian">Guardian Name (Optional)</Label>
+                <Input
+                  id="m-guardian"
+                  placeholder="e.g. Tesfaye Desta"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-relationship">Relationship</Label>
+                <Input
+                  id="m-relationship"
+                  placeholder="e.g. Father, Mother, Relative, Self"
+                  value={guardianRelationship}
+                  onChange={(e) => setGuardianRelationship(e.target.value)}
+                  className="rounded-2xl min-h-11 bg-card"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Course & Schedule */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b pb-1">
+              3. Course Selection & Operational Schedule
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-course">Instrument / Course *</Label>
+                <Select value={course} onValueChange={(v) => setCourse(v as any)}>
+                  <SelectTrigger id="m-course" className="rounded-2xl min-h-11 bg-card capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="piano">Piano (ክላሲካል / ዘመናዊ)</SelectItem>
+                    <SelectItem value="keyboard">Keyboard (ኪቦርድ)</SelectItem>
+                    <SelectItem value="guitar">Guitar (አኮስቲክ / ኤሌክትሪክ)</SelectItem>
+                    <SelectItem value="saxophone">Saxophone (ሳክሶፎን)</SelectItem>
+                    <SelectItem value="vocal">Vocal (የድምፅ ስልጠና)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-schedule">Preferred Schedule *</Label>
+                <Select value={preferredSchedule} onValueChange={setPreferredSchedule}>
+                  <SelectTrigger id="m-schedule" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SCHEDULE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {opt.id === "monday-saturday-2-1" ? `⭐ ${opt.label}` : opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-skill">Experience Level</Label>
+                <Select value={skillLevel} onValueChange={setSkillLevel}>
+                  <SelectTrigger id="m-skill" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="beginner">Beginner (New)</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-instrument">Owns Instrument?</Label>
+                <Select value={hasInstrument} onValueChange={setHasInstrument}>
+                  <SelectTrigger id="m-instrument" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes (Has instrument)</SelectItem>
+                    <SelectItem value="no">No (Uses Center's)</SelectItem>
+                    <SelectItem value="planning">Planning to buy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-classtype">Class Format</Label>
+                <Select value={classType} onValueChange={setClassType}>
+                  <SelectTrigger id="m-classtype" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="group">Group Class</SelectItem>
+                    <SelectItem value="private">1-on-1 Private</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Status & Notes */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b pb-1">
+              4. Registration Status & Remarks
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-status">Initial Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+                  <SelectTrigger id="m-status" className="rounded-2xl min-h-11 bg-card capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="enrolled">Enrolled (Active)</SelectItem>
+                    <SelectItem value="new">New Inquiry</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="m-language">Preferred Language</Label>
+                <Select value={language} onValueChange={(v) => setLanguage(v as any)}>
+                  <SelectTrigger id="m-language" className="rounded-2xl min-h-11 bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="am">አማርኛ (Amharic)</SelectItem>
+                    <SelectItem value="om">Afaan Oromoo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="m-notes">Special Goals / Administrative Notes</Label>
+              <Textarea
+                id="m-notes"
+                placeholder="e.g. Wants to focus on gospel hymns and chord transitions; attends Monday-Saturday 2:00-1:00 sessions."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                className="rounded-2xl min-h-20 bg-card"
+              />
+            </div>
+          </div>
+
+          {/* Section 5: Student Login Account (Optional) */}
+          <div className="rounded-2xl border p-4 bg-muted/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="m-create-auth" className="text-sm font-medium cursor-pointer">
+                  Create Student Portal Login Account
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Generates an authenticated login for this student using their email
+                </p>
+              </div>
+              <Switch
+                id="m-create-auth"
+                checked={createUserAccount}
+                onCheckedChange={setCreateUserAccount}
+              />
+            </div>
+
+            {createUserAccount && (
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="m-pwd">Student Initial Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => setUserPassword(generateSecurePassword())}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" /> Auto-generate strong
+                  </button>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="m-pwd"
+                    type={showPassword ? "text" : "password"}
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    required={createUserAccount}
+                    minLength={8}
+                    className="rounded-2xl min-h-11 bg-card pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-6 flex flex-col-reverse sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full flex-1"
+              onClick={() => {
+                resetForm();
+                onOpenChange(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending} className="rounded-full flex-1 shadow-md">
+              {isPending ? "Registering Student…" : "Enroll Student"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ==========================================
 // 2. STUDENTS REGISTRATION PANEL
 // ==========================================
 function StudentsPanel({
@@ -1375,13 +1828,31 @@ function StudentsPanel({
   const listFn = useServerFn(listRegistrations);
   const deleteFn = useServerFn(deleteRegistration);
   const statusFn = useServerFn(updateRegistrationStatus);
+  const manualRegisterFn = useServerFn(createManualStudentRegistration);
+
   const [query, setQuery] = useState("");
   const [course, setCourse] = useState("all");
   const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<Registration | null>(null);
+  const [openManualRegister, setOpenManualRegister] = useState(false);
 
   const registrations = useQuery({ queryKey: ["registrations"], queryFn: () => listFn({}) });
   const rows = registrations.data ?? [];
+
+  const manualRegisterMutation = useMutation({
+    mutationFn: (data: ManualStudentRegistrationInput) => manualRegisterFn({ data }),
+    onSuccess: (res) => {
+      toast.success(
+        "Student registered successfully" + (res.authUserCreated ? " with login account" : ""),
+      );
+      setOpenManualRegister(false);
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      if (res.authUserCreated) {
+        queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      }
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
@@ -1428,7 +1899,7 @@ function StudentsPanel({
         r.age,
         r.gender,
         r.course,
-        r.preferred_schedule,
+        formatScheduleLabel(r.preferred_schedule),
         r.phone_number,
         r.email,
         r.guardian_name ?? "",
@@ -1503,6 +1974,12 @@ function StudentsPanel({
         <Button variant="outline" className="min-h-11 rounded-full" onClick={exportCsv} disabled={!filtered.length}>
           <Download className="mr-2 h-4 w-4" /> Export CSV
         </Button>
+        <Button
+          onClick={() => setOpenManualRegister(true)}
+          className="min-h-11 rounded-full px-5 shadow-md font-medium"
+        >
+          <UserPlus className="mr-2 h-4 w-4" /> Register Student Manually
+        </Button>
       </div>
 
       <div className="glass-panel overflow-hidden rounded-[2rem] border border-border/60">
@@ -1542,8 +2019,8 @@ function StudentsPanel({
                       </div>
                     </TableCell>
                     <TableCell className="capitalize font-medium text-xs">{r.course}</TableCell>
-                    <TableCell className="capitalize text-xs text-muted-foreground">
-                      {r.preferred_schedule.replace(/-/g, " ")}
+                    <TableCell className="text-xs text-foreground/80 font-medium">
+                      {formatScheduleLabel(r.preferred_schedule)}
                     </TableCell>
                     <TableCell>
                       <a href={`tel:${r.phone_number}`} className="text-primary text-xs hover:underline">
@@ -1623,14 +2100,14 @@ function StudentsPanel({
                     ["Age", selected.age],
                     ["Gender", selected.gender],
                     ["Course", selected.course],
-                    ["Schedule", selected.preferred_schedule.replace(/-/g, " ")],
+                    ["Schedule", formatScheduleLabel(selected.preferred_schedule)],
                     ["Phone", selected.phone_number],
                     ["Email", selected.email],
                     ["Guardian", selected.guardian_name || "—"],
                     ["Language", selected.language],
                     ["Status", selected.status],
                     ["Registered", new Date(selected.created_at).toLocaleString()],
-                    ["Message", selected.message || "—"],
+                    ["Details / Notes", selected.message || "—"],
                   ] as const
                 ).map(([k, v]) => (
                   <div key={k} className="contents">
@@ -1654,6 +2131,13 @@ function StudentsPanel({
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ManualStudentRegisterDialog
+        open={openManualRegister}
+        onOpenChange={setOpenManualRegister}
+        onSubmit={(data) => manualRegisterMutation.mutate(data)}
+        isPending={manualRegisterMutation.isPending}
+      />
     </div>
   );
 }

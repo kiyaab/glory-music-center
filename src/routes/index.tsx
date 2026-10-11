@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { registrationSchema, submitRegistration, type RegistrationInput } from "@/lib/registration.functions";
+import { registrationSchema, submitRegistration, type RegistrationInput, SCHEDULE_OPTIONS } from "@/lib/registration.functions";
 import danielAsset from "@/assets/daniel-korsa.jpg.asset.json";
 import gosaAsset from "@/assets/gosa-alemayehu.jpg.asset.json";
 import centerAsset from "@/assets/training-center-room.jpg.asset.json";
@@ -94,8 +94,29 @@ type Copy = {
   lightMode: string;
   darkMode: string;
   successMessage: string;
-  form: { fullName: string; age: string; gender: string; phone: string; parent: string; email: string; course: string; schedule: string; message: string; submit: string; required: string };
+  form: {
+    fullName: string;
+    age: string;
+    gender: string;
+    phone: string;
+    altPhone: string;
+    parent: string;
+    guardianRelationship: string;
+    address: string;
+    email: string;
+    course: string;
+    skillLevel: string;
+    hasInstrument: string;
+    classType: string;
+    schedule: string;
+    message: string;
+    submit: string;
+    required: string;
+  };
   genders: { male: string; female: string; other: string };
+  skillLevels: { beginner: string; intermediate: string; advanced: string };
+  instrumentOwnership: { yes: string; no: string; planning: string };
+  classTypes: { group: string; private: string };
   schedules: { morning: string; afternoon: string; weekend: string };
   courses: { piano: string; keyboard: string; guitar: string; saxophone: string; vocal: string };
   filters: { all: string; piano: string; guitar: string; keyboard: string; saxophone: string; vocal: string; performances: string; events: string };
@@ -134,8 +155,40 @@ const content: Record<Lang, Copy> = {
     lightMode: "Light Mode",
     darkMode: "Dark Mode",
     successMessage: "Thank you for registering with Glory Music Center. We will contact you shortly.",
-    form: { fullName: "Full Name", age: "Age", gender: "Gender", phone: "Phone Number", parent: "Parent/Guardian Name", email: "Email", course: "Course Selection", schedule: "Preferred Schedule", message: "Message", submit: "Submit Registration", required: "This field is required." },
+    form: {
+      fullName: "Full Name",
+      age: "Age",
+      gender: "Gender",
+      phone: "Primary Phone Number",
+      altPhone: "Alternate / Emergency Phone",
+      parent: "Parent / Guardian Name (Optional)",
+      guardianRelationship: "Guardian Relationship (e.g. Parent, Self)",
+      address: "Address / Kebele (e.g. Bale Robe, Kebele 02)",
+      email: "Email Address",
+      course: "Course Selection",
+      skillLevel: "Experience / Skill Level",
+      hasInstrument: "Do you own your instrument?",
+      classType: "Class Format",
+      schedule: "Preferred Schedule (Mon - Sat 2:00 - 1:00)",
+      message: "Musical Goals / Special Requests",
+      submit: "Submit Registration",
+      required: "This field is required.",
+    },
     genders: { male: "Male", female: "Female", other: "Other" },
+    skillLevels: {
+      beginner: "Beginner (New to music)",
+      intermediate: "Intermediate (Basic knowledge)",
+      advanced: "Advanced (Performance / Solo)",
+    },
+    instrumentOwnership: {
+      yes: "Yes, I have an instrument",
+      no: "No (Will practice with Center's instruments)",
+      planning: "Planning to purchase soon",
+    },
+    classTypes: {
+      group: "Group Lessons",
+      private: "One-on-One Private Lessons",
+    },
     schedules: { morning: "Weekday Morning", afternoon: "Weekday Afternoon", weekend: "Weekend" },
     courses: { piano: "Piano", keyboard: "Keyboard", guitar: "Guitar", saxophone: "Saxophone", vocal: "Vocal" },
     filters: { all: "All", piano: "Piano Classes", guitar: "Guitar Classes", keyboard: "Keyboard Sessions", saxophone: "Saxophone Lessons", vocal: "Vocal Classes", performances: "Student Performances", events: "Music Events" },
@@ -172,8 +225,40 @@ const content: Record<Lang, Copy> = {
     lightMode: "ብርሃን ሁኔታ",
     darkMode: "ጨለማ ሁኔታ",
     successMessage: "ከGlory Music Center ጋር ስለተመዘገቡ እናመሰግናለን። በቅርቡ እንገናኝዎታለን።",
-    form: { fullName: "ሙሉ ስም", age: "ዕድሜ", gender: "ፆታ", phone: "ስልክ ቁጥር", parent: "የወላጅ/አሳዳጊ ስም", email: "ኢሜይል", course: "የሚመረጠው ኮርስ", schedule: "የተመረጠ ሰዓት", message: "መልዕክት", submit: "ምዝገባን ይላኩ", required: "ይህ መስክ አስፈላጊ ነው።" },
+    form: {
+      fullName: "ሙሉ ስም",
+      age: "ዕድሜ",
+      gender: "ፆታ",
+      phone: "ዋና ስልክ ቁጥር",
+      altPhone: "ተጨማሪ / የአደጋ ጊዜ ስልክ",
+      parent: "የወላጅ / አሳዳጊ ስም (አማራጭ)",
+      guardianRelationship: "የአሳዳጊ ዝምድና (ለምሳሌ ወላጅ፣ ራስ)",
+      address: "አድራሻ / ቀበሌ (ለምሳሌ ባሌ ሮቤ፣ ቀበሌ 02)",
+      email: "ኢሜይል",
+      course: "የሚመረጠው ኮርስ",
+      skillLevel: "የሙዚቃ ልምድ / የብቃት ደረጃ",
+      hasInstrument: "የራስዎ የሙዚቃ መሳሪያ አለዎት?",
+      classType: "የትምህርት አይነት",
+      schedule: "የተመረጠ የትምህርት ሰዓት (ሰኞ - ቅዳሜ 2:00 - 1:00)",
+      message: "የሙዚቃ ግቦች / ተጨማሪ መልዕክት",
+      submit: "ምዝገባን ይላኩ",
+      required: "ይህ መስክ አስፈላጊ ነው።",
+    },
     genders: { male: "ወንድ", female: "ሴት", other: "ሌላ" },
+    skillLevels: {
+      beginner: "ጀማሪ (አዲስ ጀማሪ)",
+      intermediate: "መካከለኛ (መሰረታዊ እውቀት ያለው)",
+      advanced: "ከፍተኛ (የተካነ / ብቸኛ ተጫዋች)",
+    },
+    instrumentOwnership: {
+      yes: "አዎ፣ በቤት ውስጥ መሳሪያ አለኝ",
+      no: "የለም (የማዕከሉን መሳሪያዎች እጠቀማለሁ)",
+      planning: "በቅርቡ ለመግዛት አቅጃለሁ",
+    },
+    classTypes: {
+      group: "የቡድን ትምህርት",
+      private: "የግል (1-ለ-1) ትምህርት",
+    },
     schedules: { morning: "የሳምንት ጠዋት", afternoon: "የሳምንት ከሰዓት", weekend: "የሳምንት መጨረሻ" },
     courses: { piano: "ፒያኖ", keyboard: "ኪቦርድ", guitar: "ጊታር", saxophone: "ሳክሶፎን", vocal: "ድምፅ" },
     filters: { all: "ሁሉም", piano: "የፒያኖ ክፍሎች", guitar: "የጊታር ክፍሎች", keyboard: "የኪቦርድ ስልጠና", saxophone: "የሳክሶፎን ትምህርት", vocal: "የድምፅ ክፍሎች", performances: "የተማሪ ትርኢቶች", events: "የሙዚቃ ዝግጅቶች" },
@@ -210,8 +295,40 @@ const content: Record<Lang, Copy> = {
     lightMode: "Haala Ifaa",
     darkMode: "Haala Dukkanaa",
     successMessage: "Galatoomi. Glory Music Center waliin galmaa'uun kee milkaa'eera. Yeroo dhihootti si qunnamna.",
-    form: { fullName: "Maqaa Guutuu", age: "Umrii", gender: "Saala", phone: "Lakkoofsa Bilbilaa", parent: "Maqaa Maatii/Guddisaa", email: "Imeelii", course: "Koorsii Filadhu", schedule: "Yeroo Filatame", message: "Ergaa", submit: "Galmee Ergi", required: "Dirqama guutamuu qaba." },
+    form: {
+      fullName: "Maqaa Guutuu",
+      age: "Umrii",
+      gender: "Saala",
+      phone: "Lakkoofsa Bilbilaa Guddaa",
+      altPhone: "Bilbila Dabalataa / Balaa",
+      parent: "Maqaa Maatii / Guddisaa (Filannoo)",
+      guardianRelationship: "Firooma Maatii (fkn. Maatii, Ofii)",
+      address: "Teessoo / Ganda (fkn. Baale Roobee)",
+      email: "Imeelii",
+      course: "Koorsii Filadhu",
+      skillLevel: "Sadarkaa Ogummaa",
+      hasInstrument: "Meeshaa muuziqaa mataa keessanii qabduu?",
+      classType: "Gosa Kutaa",
+      schedule: "Yeroo Filatame (Wiixata - Sanbata 2:00 - 1:00)",
+      message: "Kaayyoo Muuziqaa / Yaada Dabalataa",
+      submit: "Galmee Ergi",
+      required: "Dirqama guutamuu qaba.",
+    },
     genders: { male: "Dhiira", female: "Dhalaa", other: "Kan biraa" },
+    skillLevels: {
+      beginner: "Jalqabaa (Haaraa)",
+      intermediate: "Giddu-galeessa (Beekumsa bu'uuraa)",
+      advanced: "Ol-aanaa (Dandeettii olaanaa)",
+    },
+    instrumentOwnership: {
+      yes: "Eeyyee, meeshaa mataa koo qaba",
+      no: "Lakki (Meeshaalee Giddu-galeessaa fayyadama)",
+      planning: "Yeroo dhiyootti bitachuuf karooreera",
+    },
+    classTypes: {
+      group: "Barnoota Garee",
+      private: "Barnoota Dhuunfaa (1-irratti-1)",
+    },
     schedules: { morning: "Ganama Guyyaa Hojii", afternoon: "Waaree Booda Guyyaa Hojii", weekend: "Dhuma Torbanii" },
     courses: { piano: "Piyaanoo", keyboard: "Kiiboordii", guitar: "Gitaaraa", saxophone: "Saaksoofoonii", vocal: "Sagalee" },
     filters: { all: "Hunda", piano: "Kutaa Piyaanoo", guitar: "Kutaa Gitaaraa", keyboard: "Leenjii Kiiboordii", saxophone: "Barnoota Saaksoofoonii", vocal: "Kutaa Sagalee", performances: "Agarsiisa Barattootaa", events: "Sagantaalee Muuziqaa" },
@@ -285,13 +402,19 @@ function HomePage() {
     resolver: zodResolver(registrationSchema),
     defaultValues: {
       fullName: "",
-      age: 12,
+      age: 14,
       gender: "male",
       phoneNumber: "",
+      altPhoneNumber: "",
       guardianName: "",
+      guardianRelationship: "",
+      address: "Bale Robe",
       email: "",
       course: "piano",
-      preferredSchedule: "weekday-morning",
+      skillLevel: "beginner",
+      hasInstrument: "no",
+      classType: "group",
+      preferredSchedule: "monday-saturday-2-1",
       message: "",
       language: lang,
     },
@@ -342,13 +465,19 @@ function HomePage() {
       toast.success(copy.successMessage);
       form.reset({
         fullName: "",
-        age: 12,
+        age: 14,
         gender: "male",
         phoneNumber: "",
+        altPhoneNumber: "",
         guardianName: "",
+        guardianRelationship: "",
+        address: "Bale Robe",
         email: "",
         course: "piano",
-        preferredSchedule: "weekday-morning",
+        skillLevel: "beginner",
+        hasInstrument: "no",
+        classType: "group",
+        preferredSchedule: "monday-saturday-2-1",
         message: "",
         language: lang,
       });
@@ -552,20 +681,366 @@ function HomePage() {
             <p className="eyebrow">{copy.registrationTitle}</p>
             <h2 className="section-title mt-5">Start your journey with a premium registration experience.</h2>
             <p className="mt-5 text-lg text-muted-foreground">{copy.registrationSubtitle}</p>
+
+            <div className="mt-8 space-y-4 rounded-3xl border border-primary/25 bg-primary/5 p-6 backdrop-blur-sm shadow-sm">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/20 text-primary font-bold text-lg">
+                  ⭐
+                </span>
+                <div>
+                  <h4 className="font-semibold text-foreground text-sm">
+                    {lang === "am"
+                      ? "መደበኛ የትምህርት ሰዓት፡ ሰኞ - ቅዳሜ 2:00 - 1:00"
+                      : lang === "om"
+                      ? "Yeroo Hojii: Wiixata - Sanbata 2:00 - 1:00"
+                      : "Center Operating Hours: Mon – Sat (2:00 – 1:00)"}
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {lang === "am"
+                      ? "የኢትዮጵያ የቀን ሰዓት አቆጣጠር (ከጠዋቱ 2:00 ጀምሮ እስከ ምሽቱ 1:00)። ጠዋት፣ ከሰዓት ወይም ሙሉ ቀን መምረጥ ይችላሉ።"
+                      : lang === "om"
+                      ? "Sa'aatii biyyaa keessaa (Ganama 2:00 hanga Waaree Booda 1:00). Ganama, waaree booda ykn guyyaa guutuu filachuu dandeessu."
+                      : "Ethiopian daytime operational hours (8:00 AM – 7:00 PM). Full week, mornings, afternoons, or flexible private sessions."}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="glass-panel rounded-[2rem] p-6 sm:p-8">
+
+          <div className="glass-panel rounded-[2rem] p-6 sm:p-8 border border-border/60 shadow-lg">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-5 sm:grid-cols-2">
-                <FormField control={form.control} name="fullName" render={({ field }) => <FormItem><FormLabel>{copy.form.fullName}</FormLabel><FormControl><Input {...field} className="min-h-11 rounded-2xl bg-card" /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="age" render={({ field }) => <FormItem><FormLabel>{copy.form.age}</FormLabel><FormControl><Input type="number" {...field} className="min-h-11 rounded-2xl bg-card" /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="gender" render={({ field }) => <FormItem><FormLabel>{copy.form.gender}</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger className="min-h-11 rounded-2xl bg-card"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="male">{copy.genders.male}</SelectItem><SelectItem value="female">{copy.genders.female}</SelectItem><SelectItem value="other">{copy.genders.other}</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="phoneNumber" render={({ field }) => <FormItem><FormLabel>{copy.form.phone}</FormLabel><FormControl><Input {...field} className="min-h-11 rounded-2xl bg-card" /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="guardianName" render={({ field }) => <FormItem><FormLabel>{copy.form.parent}</FormLabel><FormControl><Input {...field} className="min-h-11 rounded-2xl bg-card" /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="email" render={({ field }) => <FormItem><FormLabel>{copy.form.email}</FormLabel><FormControl><Input type="email" {...field} className="min-h-11 rounded-2xl bg-card" /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="course" render={({ field }) => <FormItem><FormLabel>{copy.form.course}</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger className="min-h-11 rounded-2xl bg-card"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="piano">{copy.courses.piano}</SelectItem><SelectItem value="keyboard">{copy.courses.keyboard}</SelectItem><SelectItem value="guitar">{copy.courses.guitar}</SelectItem><SelectItem value="saxophone">{copy.courses.saxophone}</SelectItem><SelectItem value="vocal">{copy.courses.vocal}</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
-                <FormField control={form.control} name="preferredSchedule" render={({ field }) => <FormItem><FormLabel>{copy.form.schedule}</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger className="min-h-11 rounded-2xl bg-card"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="weekday-morning">{copy.schedules.morning}</SelectItem><SelectItem value="weekday-afternoon">{copy.schedules.afternoon}</SelectItem><SelectItem value="weekend">{copy.schedules.weekend}</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
-                <div className="sm:col-span-2"><FormField control={form.control} name="message" render={({ field }) => <FormItem><FormLabel>{copy.form.message}</FormLabel><FormControl><Textarea {...field} className="min-h-32 rounded-[1.5rem] bg-card" /></FormControl><FormMessage /></FormItem>} /></div>
-                <div className="sm:col-span-2"><Button type="submit" size="lg" className="min-h-12 w-full rounded-full">{copy.form.submit}</Button></div>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {/* 1. Student Identity */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-border/50 pb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      {lang === "am" ? "1. የተማሪው መረጃ" : lang === "om" ? "1. Odeeffannoo Barataa" : "1. Student Information"}
+                    </span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="fullName"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>{copy.form.fullName}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g. Samuel Bekele" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="age"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.age}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={4}
+                              max={99}
+                              value={field.value}
+                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                              className="min-h-11 rounded-2xl bg-card"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="gender"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.gender}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="male">{copy.genders.male}</SelectItem>
+                              <SelectItem value="female">{copy.genders.female}</SelectItem>
+                              <SelectItem value="other">{copy.genders.other}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="phoneNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.phone}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="+251 91 123 4567" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="altPhoneNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.altPhone}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="+251 92 987 6543" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.email}</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} placeholder="student@example.com" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.address}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Bale Robe, Kebele 02" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Guardian Details */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-border/50 pb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      {lang === "am" ? "2. የወላጅ / አሳዳጊ መረጃ" : lang === "om" ? "2. Odeeffannoo Maatii / Guddisaa" : "2. Parent / Guardian Details"}
+                    </span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="guardianName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.parent}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Parent/Guardian Name" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="guardianRelationship"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.guardianRelationship}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g. Father, Mother, Self" className="min-h-11 rounded-2xl bg-card" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Course, Skill & Schedule Selection */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-border/50 pb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      {lang === "am" ? "3. የኮርስ እና የሰዓት ምርጫ" : lang === "om" ? "3. Koorsii fi Yeroo Filatame" : "3. Course & Schedule Selection"}
+                    </span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="course"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.course}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="piano">🎹 {copy.courses.piano}</SelectItem>
+                              <SelectItem value="keyboard">⌨️ {copy.courses.keyboard}</SelectItem>
+                              <SelectItem value="guitar">🎸 {copy.courses.guitar}</SelectItem>
+                              <SelectItem value="saxophone">🎷 {copy.courses.saxophone}</SelectItem>
+                              <SelectItem value="vocal">🎤 {copy.courses.vocal}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="preferredSchedule"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.schedule}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card border-primary/40 font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {SCHEDULE_OPTIONS.map((opt) => (
+                                <SelectItem
+                                  key={opt.id}
+                                  value={opt.id}
+                                  className={opt.id === "monday-saturday-2-1" ? "font-semibold text-primary" : ""}
+                                >
+                                  {opt.id === "monday-saturday-2-1" ? "⭐ " : ""}
+                                  {lang === "am" ? opt.am : lang === "om" ? opt.om : opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="skillLevel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.skillLevel}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="beginner">{copy.skillLevels.beginner}</SelectItem>
+                              <SelectItem value="intermediate">{copy.skillLevels.intermediate}</SelectItem>
+                              <SelectItem value="advanced">{copy.skillLevels.advanced}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="hasInstrument"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{copy.form.hasInstrument}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="yes">{copy.instrumentOwnership.yes}</SelectItem>
+                              <SelectItem value="no">{copy.instrumentOwnership.no}</SelectItem>
+                              <SelectItem value="planning">{copy.instrumentOwnership.planning}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="classType"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>{copy.form.classType}</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-h-11 rounded-2xl bg-card">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="group">{copy.classTypes.group}</SelectItem>
+                              <SelectItem value="private">{copy.classTypes.private}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Notes & Submit */}
+                <div>
+                  <FormField
+                    control={form.control}
+                    name="message"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{copy.form.message}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Tell us about your musical interest, goals, or schedule preferences..."
+                            className="min-h-24 rounded-2xl bg-card"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={form.formState.isSubmitting}
+                  className="min-h-12 w-full rounded-full shadow-lg font-medium tracking-wide text-base"
+                >
+                  {form.formState.isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Submitting…
+                    </span>
+                  ) : (
+                    copy.form.submit
+                  )}
+                </Button>
               </form>
             </Form>
           </div>

@@ -557,3 +557,110 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const manualStudentRegistrationSchema = z.object({
+  fullName: z.string().trim().min(2, "Full name must be at least 2 characters").max(120),
+  age: z.coerce.number().int().min(4, "Age must be at least 4").max(99),
+  gender: z.enum(["male", "female", "other"]),
+  phoneNumber: z.string().trim().min(7, "Primary phone number is required").max(30),
+  altPhoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  email: z.string().trim().email("Please enter a valid email address").max(255),
+  guardianName: z.string().trim().max(120).optional().or(z.literal("")),
+  guardianRelationship: z.string().trim().max(50).optional().or(z.literal("")),
+  address: z.string().trim().max(120).optional().or(z.literal("")),
+  course: z.enum(["piano", "keyboard", "guitar", "saxophone", "vocal"]),
+  skillLevel: z.string().optional().or(z.literal("")),
+  hasInstrument: z.string().optional().or(z.literal("")),
+  classType: z.string().optional().or(z.literal("")),
+  preferredSchedule: z.string().min(1, "Please select a preferred schedule").max(100),
+  status: z.enum(["new", "contacted", "enrolled", "completed", "cancelled"]).default("enrolled"),
+  message: z.string().trim().max(1500).optional().or(z.literal("")),
+  language: z.enum(["en", "am", "om"]).default("en"),
+  createUserAccount: z.boolean().default(false),
+  userPassword: z.string().min(8).optional().or(z.literal("")),
+});
+
+export type ManualStudentRegistrationInput = z.infer<typeof manualStudentRegistrationSchema>;
+
+export const createManualStudentRegistration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => manualStudentRegistrationSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin, isServiceRoleConfigured } = await import("@/integrations/supabase/client.server");
+
+    // Package detailed student information into message column for complete schema resilience
+    const detailsParts = [
+      data.address ? `Address/Kebele: ${data.address}` : null,
+      data.altPhoneNumber ? `Alt Phone: ${data.altPhoneNumber}` : null,
+      data.guardianRelationship ? `Guardian Relation: ${data.guardianRelationship}` : null,
+      data.skillLevel ? `Skill Level: ${data.skillLevel}` : null,
+      data.hasInstrument ? `Owns Instrument: ${data.hasInstrument}` : null,
+      data.classType ? `Class Type: ${data.classType}` : null,
+      data.message ? `Notes: ${data.message}` : null,
+    ].filter(Boolean);
+
+    const consolidatedMessage = detailsParts.length ? detailsParts.join(" | ") : null;
+
+    const { data: registration, error: insertError } = await supabaseAdmin
+      .from("registrations")
+      .insert({
+        full_name: data.fullName,
+        age: data.age,
+        gender: data.gender,
+        phone_number: data.phoneNumber,
+        guardian_name: data.guardianName || null,
+        email: data.email,
+        course: data.course,
+        preferred_schedule: data.preferredSchedule,
+        message: consolidatedMessage,
+        language: data.language,
+        status: data.status,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw new Error(`Failed to create student registration: ${insertError.message}`);
+    }
+
+    let authUserCreated = false;
+    let authErrorMsg: string | null = null;
+
+    // If admin requested auth account creation as well and service role is available
+    if (data.createUserAccount && data.userPassword && isServiceRoleConfigured()) {
+      try {
+        const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          email: data.email,
+          password: data.userPassword,
+          email_confirm: true,
+          user_metadata: {
+            full_name: data.fullName,
+            phone_number: data.phoneNumber,
+            course: data.course,
+            role: "user",
+          },
+        });
+
+        if (authErr) {
+          authErrorMsg = authErr.message;
+        } else if (authUser?.user) {
+          await supabaseAdmin.from("user_roles").upsert({
+            user_id: authUser.user.id,
+            role: "user",
+          });
+          authUserCreated = true;
+        }
+      } catch (err) {
+        authErrorMsg = (err as Error).message;
+      }
+    }
+
+    return {
+      ok: true,
+      registration,
+      authUserCreated,
+      authErrorMsg,
+    };
+  });
+
