@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 
-import { Menu, Moon, Music2, Phone, Send, Sun, Volume2, X } from "lucide-react";
+import { GraduationCap, Menu, Moon, Music2, Phone, Send, Sun, Volume2, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -500,16 +500,21 @@ function HomePage() {
           <nav className="hidden items-center gap-1 lg:flex">
             {navIds.map((id) => <a key={id} href={`#${id}`} className="nav-pill">{copy.nav[id === "faq" ? "faq" : id === "home" ? "home" : id === "about" ? "about" : id === "courses" ? "courses" : id === "gallery" ? "gallery" : id === "testimonials" ? "testimonials" : id === "registration" ? "registration" : "contact"]}</a>)}
           </nav>
-          <div className="hidden items-center gap-3 lg:flex">
-            <select aria-label={copy.language} value={lang} onChange={(e) => setLang(e.target.value as Lang)} className="rounded-full border border-border bg-card px-3 py-2 text-sm">
+          <div className="hidden items-center gap-2.5 lg:flex">
+            <Button asChild variant="outline" size="sm" className="rounded-full h-9 px-3.5 text-xs font-semibold border-primary/40 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all">
+              <Link to="/auth" search={{ portal: "student" }}>
+                <GraduationCap className="mr-1.5 h-3.5 w-3.5" /> Student Portal
+              </Link>
+            </Button>
+            <select aria-label={copy.language} value={lang} onChange={(e) => setLang(e.target.value as Lang)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs">
               <option value="en">English</option>
               <option value="am">አማርኛ</option>
               <option value="om">Afaan Oromo</option>
             </select>
-            <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2">
-              <Sun className="h-4 w-4 text-primary" />
+            <div className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5">
+              <Sun className="h-3.5 w-3.5 text-primary" />
               <Switch checked={theme === "dark"} onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="Theme switcher" />
-              <Moon className="h-4 w-4 text-primary" />
+              <Moon className="h-3.5 w-3.5 text-primary" />
             </div>
           </div>
           <button className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border lg:hidden" aria-label="Open menu" onClick={() => setMobileOpen(true)}>
@@ -524,6 +529,9 @@ function HomePage() {
             <div className="flex justify-end"><button aria-label="Close menu" onClick={() => setMobileOpen(false)} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border"><X className="h-5 w-5" /></button></div>
             <div className="mt-8 flex flex-col gap-4 text-2xl font-display">
               {navIds.map((id) => <a key={id} href={`#${id}`} onClick={() => setMobileOpen(false)}>{copy.nav[id === "faq" ? "faq" : id === "home" ? "home" : id === "about" ? "about" : id === "courses" ? "courses" : id === "gallery" ? "gallery" : id === "testimonials" ? "testimonials" : id === "registration" ? "registration" : "contact"]}</a>)}
+              <Link to="/auth" search={{ portal: "student" }} onClick={() => setMobileOpen(false)} className="text-primary flex items-center gap-2 pt-3 border-t border-border/40 font-bold">
+                <GraduationCap className="h-6 w-6" /> Student Portal Login
+              </Link>
             </div>
             <div className="mt-8 flex gap-3">
               <select aria-label={copy.language} value={lang} onChange={(e) => setLang(e.target.value as Lang)} className="min-h-11 rounded-full border border-border bg-card px-4 text-sm">
@@ -543,9 +551,14 @@ function HomePage() {
             <p className="eyebrow">Bale Robe · Oromia · Ethiopia</p>
             <h1 className="mt-6 max-w-4xl text-5xl leading-tight sm:text-6xl lg:text-7xl"><span className="shimmer-text">{copy.heroTitle}</span></h1>
             <p className="mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl">{copy.heroSubtitle}</p>
-            <div className="mt-8 flex flex-wrap gap-4">
+            <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg" className="min-h-12 rounded-full px-6"><a href="#registration">{copy.registerNow}</a></Button>
               <Button asChild variant="outline" size="lg" className="min-h-12 rounded-full border-primary/40 bg-card/70 px-6"><a href="#courses">{copy.exploreCourses}</a></Button>
+              <Button asChild variant="ghost" size="lg" className="min-h-12 rounded-full px-5 text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10">
+                <Link to="/auth" search={{ portal: "student" }}>
+                  <GraduationCap className="mr-2 h-4 w-4" /> Student Portal
+                </Link>
+              </Button>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
               {[["100+", "Students Trained"],["5+", "Music Programs"],["100%", "Passion for Music"]].map(([value, label]) => (
@@ -1101,12 +1114,17 @@ function HomePage() {
               <p className="font-display text-2xl">Glory Music Center</p>
               <p className="mt-2 text-sm text-muted-foreground">{copy.footerRights}</p>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <a href="#about">{copy.nav.about}</a>
               <a href="#courses">{copy.nav.courses}</a>
               <a href="#gallery">{copy.nav.gallery}</a>
               <a href="#contact">{copy.nav.contact}</a>
-              <a href="/admin" className="hover:text-primary">Admin</a>
+              <Link to="/auth" search={{ portal: "student" }} className="hover:text-primary flex items-center gap-1 font-semibold text-primary">
+                <GraduationCap className="h-3.5 w-3.5" /> Student Portal
+              </Link>
+              <Link to="/auth" search={{ portal: "admin" }} className="hover:text-primary">
+                Admin
+              </Link>
             </div>
           </div>
           <div className="border-t border-border/60 pt-5 text-center text-xs uppercase tracking-[0.3em] text-muted-foreground">
