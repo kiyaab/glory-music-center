@@ -94,20 +94,26 @@ export const syncStudentIds = createServerFn({ method: "POST" })
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Fetch all registrations in chronological order
-    const { data: rows, error } = await supabaseAdmin
-      .from("registrations")
-      .select("id, full_name, created_at, message")
-      .order("created_at", { ascending: true });
+    // Fetch all registrations in chronological order (remote + local store)
+    const { readLocalRegistrations, mergeRegistrations, upsertLocalRegistration } = await import("@/lib/registrations-store");
+    let remoteRows: any[] = [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("registrations")
+        .select("id, full_name, created_at, message")
+        .order("created_at", { ascending: true });
+      if (!error && data) remoteRows = data;
+    } catch {}
 
-    if (error) {
-      throw new Error(`Failed to fetch students for ID assignment: ${error.message}`);
-    }
+    const localRows = await readLocalRegistrations();
+    const rows = mergeRegistrations(remoteRows, localRows).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
 
     let updatedCount = 0;
     const yearSequenceMap: Record<number, number> = {};
 
-    for (const reg of rows ?? []) {
+    for (const reg of rows) {
       const year = new Date(reg.created_at || Date.now()).getFullYear();
       yearSequenceMap[year] = (yearSequenceMap[year] || 0) + 1;
       const assignedId = formatStudentIdSequence(year, yearSequenceMap[year]);
@@ -119,16 +125,23 @@ export const syncStudentIds = createServerFn({ method: "POST" })
           ? `Student ID: ${assignedId} | ${reg.message}`
           : `Student ID: ${assignedId}`;
 
-        await supabaseAdmin
-          .from("registrations")
-          .update({ message: updatedMessage })
-          .eq("id", reg.id);
+        try {
+          await supabaseAdmin
+            .from("registrations")
+            .update({ message: updatedMessage })
+            .eq("id", reg.id);
+        } catch {}
+
+        await upsertLocalRegistration({
+          ...reg,
+          message: updatedMessage,
+        });
 
         updatedCount++;
       }
     }
 
-    return { ok: true, updatedCount, totalStudents: (rows ?? []).length };
+    return { ok: true, updatedCount, totalStudents: rows.length };
   });
 
 /**

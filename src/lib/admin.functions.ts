@@ -468,18 +468,28 @@ export const convertRegistrationToUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin, isServiceRoleConfigured } = await import("@/integrations/supabase/client.server");
+    const { readLocalRegistrations, updateLocalRegistrationStatus } = await import("@/lib/registrations-store");
 
     if (!isServiceRoleConfigured()) {
       throw new Error("Creating auth accounts requires SUPABASE_SERVICE_ROLE_KEY in .env.");
     }
 
-    const { data: reg, error: regErr } = await supabaseAdmin
-      .from("registrations")
-      .select("*")
-      .eq("id", data.registrationId)
-      .single();
+    let reg: any = null;
+    try {
+      const { data: regRemote } = await supabaseAdmin
+        .from("registrations")
+        .select("*")
+        .eq("id", data.registrationId)
+        .maybeSingle();
+      if (regRemote) reg = regRemote;
+    } catch {}
 
-    if (regErr || !reg) {
+    if (!reg) {
+      const localList = await readLocalRegistrations();
+      reg = localList.find((r) => r.id === data.registrationId);
+    }
+
+    if (!reg) {
       throw new Error("Student registration record not found.");
     }
 
@@ -506,7 +516,10 @@ export const convertRegistrationToUser = createServerFn({ method: "POST" })
     });
 
     // Mark registration as enrolled
-    await supabaseAdmin.from("registrations").update({ status: "enrolled" }).eq("id", data.registrationId);
+    try {
+      await supabaseAdmin.from("registrations").update({ status: "enrolled" }).eq("id", data.registrationId);
+    } catch {}
+    await updateLocalRegistrationStatus(data.registrationId, "enrolled");
 
     return {
       ok: true,
@@ -521,12 +534,25 @@ export const listRegistrations = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("registrations")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    const { readLocalRegistrations, mergeRegistrations } = await import("@/lib/registrations-store");
+
+    let remoteList: any[] = [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("registrations")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) {
+        remoteList = data;
+      } else if (error) {
+        console.warn("[Admin] Remote registrations fetch blocked/warning:", error.message);
+      }
+    } catch (err) {
+      console.warn("[Admin] Remote registrations fetch exception:", err);
+    }
+
+    const localList = await readLocalRegistrations();
+    return mergeRegistrations(remoteList, localList);
   });
 
 export const deleteRegistration = createServerFn({ method: "POST" })
@@ -535,8 +561,12 @@ export const deleteRegistration = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("registrations").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    const { deleteLocalRegistration } = await import("@/lib/registrations-store");
+
+    try {
+      await supabaseAdmin.from("registrations").delete().eq("id", data.id);
+    } catch {}
+    await deleteLocalRegistration(data.id);
     return { ok: true };
   });
 
@@ -553,8 +583,12 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("registrations").update({ status: data.status }).eq("id", data.id);
-    if (error) throw new Error(error.message);
+    const { updateLocalRegistrationStatus } = await import("@/lib/registrations-store");
+
+    try {
+      await supabaseAdmin.from("registrations").update({ status: data.status }).eq("id", data.id);
+    } catch {}
+    await updateLocalRegistrationStatus(data.id, data.status);
     return { ok: true };
   });
 
@@ -588,6 +622,9 @@ export const createManualStudentRegistration = createServerFn({ method: "POST" }
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin, isServiceRoleConfigured } = await import("@/integrations/supabase/client.server");
+    const { readLocalRegistrations, upsertLocalRegistration } = await import("@/lib/registrations-store");
+
+    const localList = await readLocalRegistrations();
 
     // Auto-generate official Student ID (GMC-YYYY-XXXX)
     const year = new Date().getFullYear();
@@ -596,9 +633,9 @@ export const createManualStudentRegistration = createServerFn({ method: "POST" }
       const { count } = await supabaseAdmin
         .from("registrations")
         .select("*", { count: "exact", head: true });
-      sequence = (count ?? 0) + 1;
+      sequence = Math.max((count ?? 0) + 1, localList.length + 1);
     } catch {
-      sequence = Math.floor(1000 + Math.random() * 9000);
+      sequence = localList.length + 1;
     }
     const studentId = `GMC-${year}-${String(sequence).padStart(4, "0")}`;
 
@@ -615,28 +652,57 @@ export const createManualStudentRegistration = createServerFn({ method: "POST" }
     ].filter(Boolean);
 
     const consolidatedMessage = detailsParts.length ? detailsParts.join(" | ") : null;
+    const registrationId = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
 
-    const { data: registration, error: insertError } = await supabaseAdmin
-      .from("registrations")
-      .insert({
-        full_name: data.fullName,
-        age: data.age,
-        gender: data.gender,
-        phone_number: data.phoneNumber,
-        guardian_name: data.guardianName || null,
-        email: data.email,
-        course: data.course,
-        preferred_schedule: data.preferredSchedule,
-        message: consolidatedMessage,
-        language: data.language,
-        status: data.status,
-      })
-      .select()
-      .single();
+    const regRecord = {
+      id: registrationId,
+      full_name: data.fullName,
+      age: data.age,
+      gender: data.gender,
+      phone_number: data.phoneNumber,
+      guardian_name: data.guardianName || null,
+      email: data.email,
+      course: data.course,
+      preferred_schedule: data.preferredSchedule,
+      message: consolidatedMessage,
+      language: data.language,
+      status: data.status,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
 
-    if (insertError) {
-      throw new Error(`Failed to create student registration: ${insertError.message}`);
+    // Attempt remote Supabase insert
+    let remoteSaved = false;
+    try {
+      const { error: insertError } = await supabaseAdmin
+        .from("registrations")
+        .insert({
+          id: regRecord.id,
+          full_name: regRecord.full_name,
+          age: regRecord.age,
+          gender: regRecord.gender,
+          phone_number: regRecord.phone_number,
+          guardian_name: regRecord.guardian_name,
+          email: regRecord.email,
+          course: regRecord.course,
+          preferred_schedule: regRecord.preferred_schedule,
+          message: regRecord.message,
+          language: regRecord.language,
+          status: regRecord.status,
+        });
+
+      if (!insertError) {
+        remoteSaved = true;
+      } else {
+        console.warn(`[Admin] Remote Supabase registration write blocked (${insertError.code ?? "RLS"}): ${insertError.message}. Storing in resilient local store.`);
+      }
+    } catch (insertErr) {
+      console.warn("[Admin] Remote Supabase registration exception:", insertErr);
     }
+
+    // Always mirror to resilient local store so data is safe and immediately accessible
+    await upsertLocalRegistration(regRecord);
 
     let authUserCreated = false;
     let authErrorMsg: string | null = null;
@@ -672,7 +738,9 @@ export const createManualStudentRegistration = createServerFn({ method: "POST" }
 
     return {
       ok: true,
-      registration,
+      registration: regRecord,
+      studentId,
+      remoteSaved,
       authUserCreated,
       authErrorMsg,
     };

@@ -103,7 +103,7 @@ import {
   type AttendanceStats,
 } from "@/lib/attendance.functions";
 import { clearClientAdminSession } from "@/lib/auth-admin";
-import { deleteGalleryPhoto, listGalleryPhotos } from "@/lib/gallery.functions";
+import { deleteGalleryPhoto, listGalleryPhotos, uploadGalleryPhoto } from "@/lib/gallery.functions";
 import { formatScheduleLabel, SCHEDULE_OPTIONS } from "@/lib/registration.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -3330,6 +3330,7 @@ function GalleryPanel() {
   const queryClient = useQueryClient();
   const listFn = useServerFn(listGalleryPhotos);
   const deleteFn = useServerFn(deleteGalleryPhoto);
+  const uploadFn = useServerFn(uploadGalleryPhoto);
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [category, setCategory] = useState("events");
@@ -3352,17 +3353,28 @@ function GalleryPanel() {
     if (!file.type.startsWith("image/")) return toast.error("Only image files are allowed");
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
-      const { error: dbErr } = await supabase.from("gallery_photos").insert({
-        storage_path: path,
-        caption: caption.trim() || null,
-        category,
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
-      if (dbErr) throw dbErr;
-      toast.success("Photo posted to the gallery");
+
+      const res = await uploadFn({
+        data: {
+          fileName: file.name,
+          contentType: file.type || "image/jpeg",
+          base64Data,
+          caption: caption.trim() || null,
+          category,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to post photo to gallery.");
+      }
+
+      toast.success("Photo posted to the gallery!");
       setFile(null);
       setCaption("");
       (e.target as HTMLFormElement).reset();

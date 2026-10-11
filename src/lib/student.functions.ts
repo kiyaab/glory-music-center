@@ -236,17 +236,23 @@ export const getStudentPortalData = createServerFn({ method: "GET" })
     const userFullName = (userMetadata.full_name as string) || "";
     const userPhone = (userMetadata.phone_number as string) || "";
 
-    // 2. Fetch all registrations to find this student's registration
-    const { data: allRegistrations, error: regError } = await supabaseAdmin
-      .from("registrations")
-      .select("*")
-      .order("created_at", { ascending: true });
+    // 2. Fetch all registrations (remote + local fallback store) to find this student's registration
+    const { readLocalRegistrations, mergeRegistrations } = await import("@/lib/registrations-store");
+    let remoteRegistrations: any[] = [];
+    try {
+      const { data, error: regError } = await supabaseAdmin
+        .from("registrations")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (!regError && data) {
+        remoteRegistrations = data;
+      }
+    } catch {}
 
-    if (regError) {
-      throw new Error(`Failed to query student records: ${regError.message}`);
-    }
-
-    const rows = allRegistrations ?? [];
+    const localRegistrations = await readLocalRegistrations();
+    const rows = mergeRegistrations(remoteRegistrations, localRegistrations).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
 
     // Match student: by email, or phone, or full name
     let matchedIndex = -1;

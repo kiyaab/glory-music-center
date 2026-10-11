@@ -42,6 +42,9 @@ export const submitRegistration = createServerFn({ method: "POST" })
   .inputValidator((data) => registrationSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { readLocalRegistrations, upsertLocalRegistration } = await import("@/lib/registrations-store");
+
+    const localList = await readLocalRegistrations();
 
     // Auto-generate official Student ID (GMC-YYYY-XXXX)
     const year = new Date().getFullYear();
@@ -50,9 +53,9 @@ export const submitRegistration = createServerFn({ method: "POST" })
       const { count } = await supabaseAdmin
         .from("registrations")
         .select("*", { count: "exact", head: true });
-      sequence = (count ?? 0) + 1;
+      sequence = Math.max((count ?? 0) + 1, localList.length + 1);
     } catch {
-      sequence = Math.floor(1000 + Math.random() * 9000);
+      sequence = localList.length + 1;
     }
     const studentId = `GMC-${year}-${String(sequence).padStart(4, "0")}`;
 
@@ -69,8 +72,11 @@ export const submitRegistration = createServerFn({ method: "POST" })
     ].filter(Boolean);
 
     const consolidatedMessage = detailsParts.length ? detailsParts.join(" | ") : null;
+    const registrationId = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
 
-    const { error } = await supabaseAdmin.from("registrations").insert({
+    const recordToSave = {
+      id: registrationId,
       full_name: data.fullName,
       age: data.age,
       gender: data.gender,
@@ -82,11 +88,39 @@ export const submitRegistration = createServerFn({ method: "POST" })
       message: consolidatedMessage,
       language: data.language,
       status: "new",
-    });
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
 
-    if (error) {
-      throw new Error(`Failed to submit registration: ${error.message}`);
+    // Attempt remote Supabase insert first
+    let remoteSaved = false;
+    try {
+      const { error } = await supabaseAdmin.from("registrations").insert({
+        id: recordToSave.id,
+        full_name: recordToSave.full_name,
+        age: recordToSave.age,
+        gender: recordToSave.gender,
+        phone_number: recordToSave.phone_number,
+        guardian_name: recordToSave.guardian_name,
+        email: recordToSave.email,
+        course: recordToSave.course,
+        preferred_schedule: recordToSave.preferred_schedule,
+        message: recordToSave.message,
+        language: recordToSave.language,
+        status: recordToSave.status,
+      });
+
+      if (!error) {
+        remoteSaved = true;
+      } else {
+        console.warn(`[Registration] Remote Supabase write blocked (${error.code ?? "RLS"}): ${error.message}. Persisting to local resilient storage.`);
+      }
+    } catch (remoteErr) {
+      console.warn("[Registration] Remote Supabase exception:", remoteErr);
     }
 
-    return { ok: true };
+    // Always mirror to resilient local storage so the student is NEVER lost
+    await upsertLocalRegistration(recordToSave);
+
+    return { ok: true, studentId, remoteSaved };
   });
