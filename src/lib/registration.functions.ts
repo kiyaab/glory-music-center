@@ -43,8 +43,22 @@ export const submitRegistration = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Auto-generate official Student ID (GMC-YYYY-XXXX)
+    const year = new Date().getFullYear();
+    let sequence = 1;
+    try {
+      const { count } = await supabaseAdmin
+        .from("registrations")
+        .select("*", { count: "exact", head: true });
+      sequence = (count ?? 0) + 1;
+    } catch {
+      sequence = Math.floor(1000 + Math.random() * 9000);
+    }
+    const studentId = `GMC-${year}-${String(sequence).padStart(4, "0")}`;
+
     // Combine structured extra student details into message text to preserve across all database versions
     const detailsParts = [
+      `Student ID: ${studentId}`,
       data.address ? `Address/Kebele: ${data.address}` : null,
       data.altPhoneNumber ? `Alt Phone: ${data.altPhoneNumber}` : null,
       data.guardianRelationship ? `Guardian Relation: ${data.guardianRelationship}` : null,

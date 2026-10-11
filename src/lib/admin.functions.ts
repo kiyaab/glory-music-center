@@ -27,7 +27,7 @@ export type AdminStatus = {
 
 import { isMasterAdminId, ADMIN_CREDENTIALS } from "@/lib/auth-admin";
 
-async function assertAdmin(userId: string) {
+export async function assertAdmin(userId: string) {
   if (isMasterAdminId(userId)) {
     return;
   }
@@ -589,8 +589,22 @@ export const createManualStudentRegistration = createServerFn({ method: "POST" }
     await assertAdmin(context.userId);
     const { supabaseAdmin, isServiceRoleConfigured } = await import("@/integrations/supabase/client.server");
 
+    // Auto-generate official Student ID (GMC-YYYY-XXXX)
+    const year = new Date().getFullYear();
+    let sequence = 1;
+    try {
+      const { count } = await supabaseAdmin
+        .from("registrations")
+        .select("*", { count: "exact", head: true });
+      sequence = (count ?? 0) + 1;
+    } catch {
+      sequence = Math.floor(1000 + Math.random() * 9000);
+    }
+    const studentId = `GMC-${year}-${String(sequence).padStart(4, "0")}`;
+
     // Package detailed student information into message column for complete schema resilience
     const detailsParts = [
+      `Student ID: ${studentId}`,
       data.address ? `Address/Kebele: ${data.address}` : null,
       data.altPhoneNumber ? `Alt Phone: ${data.altPhoneNumber}` : null,
       data.guardianRelationship ? `Guardian Relation: ${data.guardianRelationship}` : null,
